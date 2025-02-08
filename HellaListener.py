@@ -1,17 +1,23 @@
 from flask import Flask, request, Response
-from lxml import etree
-import Hella_Message
-import xml.etree.ElementTree as ET
+from defusedxml.lxml import fromstring
+import logging
+import requests
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
 def log_error(error_reason, error_response):
-    print("Error response from APS:")
-    print("Error reason: " + error_reason)
-    print("Error response: " + error_response)
+    logger.error(f"Error response from APS: Reason: {error_reason}, Response: {error_response}")
 
 def create_startup_response(referenced_notification_id):
-    print("ID: " + referenced_notification_id)
+    if not referenced_notification_id:
+        logger.warning("Missing notification ID in startup response.")
+        return None
+
+    logger.info(f"Startup Notification ID: {referenced_notification_id}")
     return f"""<?xml version="1.0" encoding="utf-8"?>
         <soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope"
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -38,7 +44,11 @@ def create_startup_response(referenced_notification_id):
         </soap:Envelope>"""
 
 def create_count_channels_response(referenced_notification_id):
-    print("ID: " + referenced_notification_id)
+    if not referenced_notification_id:
+        logger.warning("Missing notification ID in count channels response.")
+        return None
+
+    logger.info(f"Count Channels Response ID: {referenced_notification_id}")
     return f"""<?xml version="1.0" encoding="utf-8"?>
         <soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope"
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -53,72 +63,75 @@ def create_count_channels_response(referenced_notification_id):
         </soap:Envelope>"""
 
 def send_count_to_modem(ins, outs):
-    print ('Sending to modem: ')
-    print ('Ins: ' + str(ins))
-    print ('Outs: ' + str(outs))
-    print ('____________________________')
+    url = "http://127.0.0.1:5000/passCounts"
+    json_data = {"message": f"ROUTE=UNKNOWN;D1INS={ins};D1OUTS={outs}"}
+    headers = {"Content-Type": "application/json"}
+
+    try:
+        response = requests.post(url, json=json_data, headers=headers, timeout=5)
+        response.raise_for_status()  # Raise exception for HTTP errors
+        logger.info(f"Count data sent to modem successfully: {json_data}")
+    except requests.RequestException as e:
+        logger.error(f"Failed to send count data to modem: {e}")
 
 def get_response(root_xml, xml_data):
     namespaces = {"sde2": "http://www.aglaia-gmbh.de/xml/2013/05/17/BaSS_SOAPd.xsd"}
 
-    # Look for error message
-    error_message = root_xml.find(".//sde2:error_message", namespaces=namespaces)
-    if error_message is not None:
-        print('Error notification')
-        log_error(error_message.attrib.get('error_reason'), error_message.attrib.get('error_text'))
-        return None
+    try:
+        # Error message check
+        error_message = root_xml.find(".//sde2:error_message", namespaces=namespaces)
+        if error_message is not None:
+            log_error(error_message.attrib.get('error_reason', 'Unknown'),
+                      error_message.attrib.get('error_text', 'Unknown'))
+            return None
 
-    # Look for alive notification
-    alive_notification = root_xml.find(".//sde2:alive_notification", namespaces=namespaces)
-    if alive_notification is not None: 
-        print('Alive notification')
-        return None    
-    
-    # Look for startup notification
-    startup_notification = root_xml.find(".//sde2:startup_notification", namespaces=namespaces)
-    if startup_notification is not None:
-        print('Startup Notification')
-        return create_startup_response(startup_notification.attrib.get('notification_ID'))
-    
-    # Look for count notification
-    count_channels_notification = root_xml.find(".//sde2:count_channels_notification", namespaces=namespaces)
-    if count_channels_notification is not None:
-        print('count_channels Response')
-        root = ET.fromstring(xml_data)
-        ins = 0
-        outs = 0
-        # For debugging purposes
-        for child in root.iter():
-            if child.attrib and child.attrib.get('count_in'):
-                ins += int(child.attrib.get('count_in')) 
-                outs += int(child.attrib.get('count_out'))
-        resopnse = create_count_channels_response(count_channels_notification.attrib.get('notification_ID'))
-        send_count_to_modem(ins, outs)
-        return resopnse
-    
+        # Alive notification check
+        if root_xml.find(".//sde2:alive_notification", namespaces=namespaces) is not None:
+            logger.info("Alive notification received.")
+            return None
+
+        # Startup notification
+        startup_notification = root_xml.find(".//sde2:startup_notification", namespaces=namespaces)
+        if startup_notification is not None:
+            return create_startup_response(startup_notification.attrib.get('notification_ID'))
+
+        # Count channels notification
+        count_channels_notification = root_xml.find(".//sde2:count_channels_notification", namespaces=namespaces)
+        if count_channels_notification is not None:
+            logger.info("Processing count_channels_notification")
+
+            try:
+                root = fromstring(xml_data.encode())  # Convert string to bytes
+                ins, outs = 0, 0
+                for child in root.iter():
+                    ins += int(child.attrib.get('count_in', 0))
+                    outs += int(child.attrib.get('count_out', 0))
+                
+                response_xml = create_count_channels_response(count_channels_notification.attrib.get('notification_ID'))
+                send_count_to_modem(ins, outs)
+                return response_xml
+            except Exception as e:
+                logger.error(f"Error parsing count data: {e}")
+                return None
+    except Exception as e:
+        logger.error(f"Error processing XML response: {e}")
+        return None
 
 @app.route('/sensor', methods=['POST'])
 def handle_sensor():
     try:
         xml_data = request.data.decode('utf-8')
-        
-        '''
-        root = ET.fromstring(xml_data)
-        # For debugging purposes
-        for child in root.iter():
-            if child.attrib:  # Check if the element has attributes
-                print(f"Element: {child.tag}")
-                for key, value in child.attrib.items():
-                    print(f"  {key}: {value}")
-        '''
 
-        raw_data = request.data
-        tree = etree.fromstring(raw_data)
+        # Secure XML parsing
+        tree = fromstring(xml_data.encode())  # Convert string to bytes
         soap_response = get_response(tree, xml_data)
-        return Response(soap_response, mimetype='text/xml', status=200)
+
+        if soap_response:
+            return Response(soap_response, mimetype='text/xml', status=200)
+        return Response("No valid response generated", status=204)
     except Exception as e:
-        print("Error processing the message:", e)
-        return Response(f"Error processing the message: {e}", status=500)
+        logger.error(f"Error processing the message: {e}")
+        return Response("Internal Server Error", status=500)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=80)
+    app.run(host="0.0.0.0", port=8080, threaded=True)
