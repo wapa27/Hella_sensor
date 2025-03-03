@@ -2,6 +2,7 @@ from flask import Flask, request, Response
 from defusedxml.lxml import fromstring
 import logging
 import requests
+import socket  # Import socket module
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -121,11 +122,12 @@ def get_response(root_xml, xml_data):
 def handle_sensor():
     try:
         xml_data = request.data.decode('utf-8')
-
+        logger.info(request.remote_addr)
         # Secure XML parsing
         tree = fromstring(xml_data.encode())  # Convert string to bytes
+        
         soap_response = get_response(tree, xml_data)
-
+#        print(soap_response)
         if soap_response:
             return Response(soap_response, mimetype='text/xml', status=200)
         return Response("No valid response generated", status=204)
@@ -134,4 +136,8 @@ def handle_sensor():
         return Response("Internal Server Error", status=500)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080, threaded=True)
+    # Specify the static IP address of the Raspberry Pi to listen on
+    static_ip = "192.168.1.1"
+    logger.info(f"Listening on IP: {static_ip}:8080")  # Log the IP address
+    app.run(host=static_ip, port=8080, threaded=True)
+

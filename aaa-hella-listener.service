@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 WorkingDirectory=/home/wapa1274/Documents/HellaListener/Hella_sensor
-ExecStart=/bin/bash -c 'source /home/wapa1274/Documents/HellaListener/Hella_sensor/hella/bin/activate && /home/wapa1274/Documents/HellaListener/Hella_sensor/hella/bin/python /home/wapa1274/Documents/HellaListener/Hella_sensor/HellaListener.py'
+ExecStart=/bin/bash -c 'source /home/wapa1274/Documents/HellaListener/Hella_sensor/hella/bin/activate && /home/wapa1274/Documents/HellaListener/Hella_sensor/hella/bin/python /home/wapa1274/Documents/HellaListener/Hella_sensor/HellaListener.py --host 0.0.0.0 --port 8080'
 Restart=always
 Environment=PATH=/home/wapa1274/Documents/HellaListener/Hella_sensor/hella/bin
 Environment=FLASK_APP=HellaListener.py
