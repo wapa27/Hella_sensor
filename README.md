@@ -1,4 +1,4 @@
-To run the program, you will need to install Flask and lxml. It is recommended that you use a virtual environment for this.
+To run the program, you will need to install Flask, requests, and lxml. It is recommended that you use a virtual environment for this.
 
 `` python HellaListener.py ``
 
