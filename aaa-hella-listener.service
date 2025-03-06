@@ -1,13 +1,13 @@
 [Unit]
-Description=Flask Application
+Description=FastAPI Application
 After=network.target
 
 [Service]
-WorkingDirectory=/home/wapa1274/Documents/HellaListener/Hella_sensor
-ExecStart=/bin/bash -c 'source /home/wapa1274/Documents/HellaListener/Hella_sensor/hella/bin/activate && /home/wapa1274/Documents/HellaListener/Hella_sensor/hella/bin/python /home/wapa1274/Documents/HellaListener/Hella_sensor/HellaListener.py --host 0.0.0.0 --port 8080'
-Restart=always
-Environment=PATH=/home/wapa1274/Documents/HellaListener/Hella_sensor/hella/bin
-Environment=FLASK_APP=HellaListener.py
+WorkingDirectory=/home/wapa/Documents/Hella_sensor
+ExecStart=/bin/bash -c 'source /home/wapa/Documents/Hella_sensor/hella-fast/bin/activate && uvicorn HellaListener:app --host 192.168.1.1 --port 8080'
+Restart=on-failure
+RestartSec=10
+Environment=PATH=/home/wapa/Documents/Hella_sensor/hella-fast/bin
 StandardOutput=inherit
 StandardError=inherit
 
