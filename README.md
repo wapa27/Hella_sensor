@@ -1,5 +1,18 @@
-To run the program, you will need to install fastAPI. It is recommended that you use a virtual environment for this.
+To run, create a virtual environment:
+``
+    python3 -m venv hella-fast ``
 
+Activate the environment:
+``
+    source hella-fast/bin/activate ``
+
+Install dependencies:
+`` 
+    pip install fastapi uvicorn defusedxml requests ``
+
+Note that the sensor must be connected via ethernet to the RPI to run the program.
+
+Run the app: 
 `` uvicorn HellaListener:app --host 192.168.1.1 --port 8080 ``
 
 You may need to manually set the RPI IP:
